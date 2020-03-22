@@ -31,17 +31,12 @@ stepFunctions:
           Extract:
             Type: Task
             Resource: "arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service}-${opt:stage}-extract"
-            Next: ConfigureCount
-          ConfigureCount:
-            Type: Pass
-            Result: 2
-            ResultPath: "$.count"
-            "Next": CheckResults
+            Next: CheckResults
           CheckResults: 
             Type: Choice
             Choices: [
-              Variable: $.results.finished
-              BooleanEquals: false
+              Variable: $.results.finished,
+              BooleanEquals: false,
               Next: ExampleWork
             ]
             Default: Done
