@@ -1,8 +1,9 @@
-service: example-stepf-nodejs
+service: lambda-extraction
 
 provider:
   name: aws
   runtime: nodejs12.x
+  stage: dev
   iamRoleStatements:
     - Effect: "Allow"
       Action:
@@ -13,12 +14,17 @@ provider:
 
 functions:
   extract:
-    name: lambda-extract
+    name: lambda-extraction
     memorySize: 512
     timeout: 300
-    handler: src/functions/extract/index.handler
+    handler: src/functions/extract/extract.handler
     environment: 
       BATCH_SIZE: 500
+  transform:
+    name: lambda-transform
+    memorySize: 512
+    timeout: 300
+    handler: src/functions/transform/index.transform    
 
 stepFunctions:
   stateMachines:
@@ -30,29 +36,32 @@ stepFunctions:
         States:
           Extract:
             Type: Task
-            Resource: "arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service}-${opt:stage}-extract"
-            Next: CheckResults
+            Resource: "arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service}"
+            Next: ConfigureTransform
+          ConfigureTransform:
+            Type: Pass
+            Next: Transform
+          Transform:
+            Type: Task
+            Resource: "arn:aws:lambda:us-east-1:795725798797:function:lambda-transform"
+            ResultPath: $.transform
+            Next: CheckResults  
           CheckResults: 
             Type: Choice
-            Choices: [
-              Variable: $.results.finished,
-              BooleanEquals: false,
-              Next: ExampleWork
-            ]
-            Default: Done
-          ExampleWork:
-            Type: Pass
-            Result:
-              success: true
-            ResultPath: $.result
-            Next: Extract
-          Done:
-            Type: Pass
-            End: true
+            Choices: 
+              - Variable: "$.transform.extract.results['finished']"
+                BooleanEquals: false
+                Next: "Extract"
+              - Variable: "$.transform.extract.results['finished']"
+                BooleanEquals: true
+                Next: "Finish"
+          Finish:
+            Type: "Succeed"  
 plugins:
   - serverless-webpack
   - serverless-step-functions
   - serverless-pseudo-parameters
+
 custom:
   webpack:
     webpackConfig: ./webpack.config.js
